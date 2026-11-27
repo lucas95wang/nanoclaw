@@ -37,7 +37,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "learn": "bash learning/start.sh",
-    "learn:build": "cd learning/panel && pnpm install && pnpm run build"
+    "learn:build": "cd learning/panel && pnpm install && pnpm run build",
+    "learn:e2e": "cd learning/e2e && node run.mjs"
   },
   "dependencies": {
     "@clack/core": "^1.2.0",

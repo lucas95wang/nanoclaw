@@ -1,0 +1,12 @@
+{
+  "name": "nanoclaw-learning-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install-browser": "playwright install --with-deps chromium",
+    "test": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.52.0"
+  }
+}

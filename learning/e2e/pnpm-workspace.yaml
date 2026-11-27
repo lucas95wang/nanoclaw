@@ -1,0 +1,2 @@
+# separate pnpm project (playwright only)
+packages: []
