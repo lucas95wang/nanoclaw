@@ -57,6 +57,9 @@ import {
 } from './gateway-providers/index.js';
 import { releaseGatewaySession, type GatewaySessionControl } from './gateway-session-lifecycle.js';
 import { initGroupFilesystem } from './group-init.js';
+import { armSessionTrace, unwatchSession } from './learning/container-trace.js';
+import { faultActive } from './learning/faults.js';
+import { trace } from './learning/trace.js';
 import { getAgentMailbox } from './mailbox/index.js';
 import { stopTypingRefresh } from './modules/typing/index.js';
 import { log } from './log.js';
@@ -407,6 +410,15 @@ export function wakeContainer(session: Session): Promise<boolean> {
   }
   if (activeContainers.has(session.id)) {
     log.debug('Container already running', { sessionId: session.id });
+    trace({
+      stage: 4,
+      event: 'wake:already-running',
+      sessionId: session.id,
+      agentGroupId: session.agent_group_id,
+      file: 'src/container-runner.ts',
+      fn: 'wakeContainer',
+      data: { containerName: activeContainers.get(session.id)?.containerName ?? null, warm: true },
+    });
     return Promise.resolve(true);
   }
   const existing = wakePromises.get(session.id);
@@ -530,6 +542,44 @@ async function spawnContainer(session: Session): Promise<void> {
 
     log.info('Spawning session', { sessionId: session.id, agentGroup: agentGroup.name, containerName });
 
+    // Learning stage 4 (wake): the fully composed spec, before anything runs.
+    const agentContainer = spec.containers.find((c) => c.role === 'agent') ?? spec.containers[0];
+    trace({
+      stage: 4,
+      event: 'wake:spec',
+      sessionId: session.id,
+      agentGroupId: agentGroup.id,
+      file: 'src/container-runner.ts',
+      fn: 'spawnContainer → composeSessionSpec',
+      data: {
+        containerName,
+        image: agentContainer?.image ?? null,
+        command: agentContainer?.command ?? null,
+        args: agentContainer?.args ?? null,
+        mounts: (agentContainer?.mounts ?? []).map((m) => ({ host: m.hostPath, container: m.containerPath, mode: m.mode, class: m.class })),
+        envKeys: Object.keys(agentContainer?.env ?? {}),
+        contributedEnvKeys: Object.keys(agentContainer?.contributedEnv ?? {}),
+        network: spec.network,
+        networkAccess: spec.networkAccess,
+        hardening: spec.hardening,
+        resources: spec.resources,
+        runAs: spec.runAs,
+        provider,
+        gatewayContainers: (gateway.containers ?? []).length,
+        auxiliaryContainers: spec.containers.length - 1,
+      },
+    });
+    // Learning drill: a simulated driver refusal. The host sweep retries each
+    // minute, so clearing the fault heals the session.
+    if (faultActive('wake-refused')) {
+      throw Object.assign(new Error('learning fault wake-refused: session driver refused to start the agent container'), {
+        kind: 'denied-by-policy',
+        detail: 'NANOCLAW_LEARNING drill: fault "wake-refused" is active',
+      });
+    }
+    // Arm the container-side trace file for this run (marker in the session dir).
+    armSessionTrace(agentGroup.id, session.id);
+
     // Claim before touching runtime state. Another host may already own the session.
     claimIncarnation = await claimSessionRun(session.id, containerName);
     if (claimIncarnation === null) {
@@ -547,15 +597,34 @@ async function spawnContainer(session: Session): Promise<void> {
       kind: claimIncarnation === null ? 'host-detached' : 'session-ended',
       reason: 'spawn-failed',
     });
+    trace({
+      stage: 4,
+      event: 'wake:failed',
+      sessionId: session.id,
+      agentGroupId: agentGroup.id,
+      file: 'src/container-runner.ts',
+      fn: 'spawnContainer',
+      data: { phase: 'compose-or-claim', error: err instanceof Error ? err.message : String(err), kind: (err as { kind?: unknown })?.kind ?? null },
+    });
     throw err;
   }
 
   let handle: SupervisedHandle;
+  const prepareStartedMs = Date.now();
   try {
     handle = await driver.prepare(spec);
   } catch (err) {
     await releaseClaimQuietly(session.id, claimIncarnation);
     await releaseGatewaySession(gatewaySession, { kind: 'session-ended', reason: 'driver-prepare-failed' });
+    trace({
+      stage: 4,
+      event: 'wake:failed',
+      sessionId: session.id,
+      agentGroupId: agentGroup.id,
+      file: 'src/drivers/docker-driver.ts',
+      fn: 'DockerSessionDriver.prepare',
+      data: { phase: 'driver-prepare', error: err instanceof Error ? err.message : String(err) },
+    });
     throw err;
   }
   const runtime = registerRuntime(session.id, handle, gatewaySession, containerName, false);
@@ -567,6 +636,15 @@ async function spawnContainer(session: Session): Promise<void> {
       void finishAndResolve(session.id, runtime, failure);
     },
     afterStart: () => {
+      trace({
+        stage: 4,
+        event: 'wake:started',
+        sessionId: session.id,
+        agentGroupId: agentGroup.id,
+        file: 'src/drivers/docker-driver.ts',
+        fn: 'DockerHandle.start (docker start --attach)',
+        data: { containerName, claimIncarnation, prepareAndStartMs: Date.now() - prepareStartedMs },
+      });
       return markContainerRunning(session.id);
     },
     beforeStart: () => {
@@ -854,6 +932,21 @@ async function finish(sessionId: string, runtime: ActiveSessionRuntime, failure?
       exitCode: failure && failure.kind === 'started-then-died' ? failure.exitCode : undefined,
     });
   }
+  trace({
+    stage: 4,
+    event: 'container:ended',
+    sessionId,
+    file: 'src/container-runner.ts',
+    fn: 'finish',
+    data: {
+      containerName,
+      stopReason: runtime.stopReason ?? null,
+      failureKind: failure?.kind ?? null,
+      exitCode: failure && failure.kind === 'started-then-died' ? failure.exitCode : null,
+      uptimeMs: Date.now() - runtime.startedAtMs,
+    },
+  });
+  unwatchSession(sessionId);
 
   if (activeContainers.get(sessionId) === runtime) {
     activeContainers.delete(sessionId);

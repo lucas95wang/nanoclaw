@@ -3,6 +3,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { ltrace } from '../learning-trace.js';
 import { getAgentMailbox } from '../mailbox/index.js';
 import type { OutboundMessage } from '../mailbox/types.js';
 
@@ -91,8 +92,9 @@ function messageRow(message: OutboundMessage): MessageOutRow {
   };
 }
 
-export function writeMessageOut(msg: WriteMessageOut): Promise<number> {
-  return getAgentMailbox().operations.writeMessageOut({
+export async function writeMessageOut(msg: WriteMessageOut): Promise<number> {
+  const content = decorateContent(msg);
+  const seq = await getAgentMailbox().operations.writeMessageOut({
     id: msg.id,
     inReplyTo: msg.in_reply_to,
     deliverAfter: msg.deliver_after,
@@ -101,8 +103,28 @@ export function writeMessageOut(msg: WriteMessageOut): Promise<number> {
     platformId: msg.platform_id,
     channelType: msg.channel_type,
     threadId: msg.thread_id,
-    content: decorateContent(msg),
+    content,
   });
+  // Learning stage 7 (outbox): a row is in outbound.db for the host to deliver.
+  ltrace({
+    stage: 7,
+    event: 'outbox:written',
+    msgId: msg.in_reply_to,
+    file: 'container/agent-runner/src/db/messages-out.ts',
+    fn: 'writeMessageOut',
+    data: {
+      outboundId: msg.id,
+      seq,
+      kind: msg.kind,
+      channelType: msg.channel_type ?? null,
+      platformId: msg.platform_id ?? null,
+      threadId: msg.thread_id ?? null,
+      inReplyTo: msg.in_reply_to ?? null,
+      deliverAfter: msg.deliver_after ?? null,
+      content,
+    },
+  });
+  return seq;
 }
 
 export function getMessageIdBySeq(seq: number): string | null {

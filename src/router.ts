@@ -32,6 +32,8 @@ import { findSessionForAgent } from './db/sessions.js';
 import { backfillSession, fanInboundMessage } from './modules/cross-session-context/index.js';
 import { gatherWakeContext, takeWriteTurn } from './wake-context.js';
 import { startTypingRefresh, stopTypingRefresh } from './modules/typing/index.js';
+import { faultActive } from './learning/faults.js';
+import { trace } from './learning/trace.js';
 import { log } from './log.js';
 import { resolveSession, withExistingMailboxSession, writeSessionMessage } from './session-manager.js';
 import { requestWake } from './request-wake.js';
@@ -298,9 +300,39 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
     agentCount = found.agentCount;
   }
 
+  // Learning stage 2 (route): which chat this is and how many agents are wired.
+  trace({
+    stage: 2,
+    event: 'route:messaging-group',
+    msgId: event.message.id,
+    file: 'src/router.ts',
+    fn: 'routeInbound',
+    data: {
+      messagingGroupId: mg.id,
+      autoCreated: !found,
+      channelType: mg.channel_type,
+      instance: mg.instance,
+      platformId: mg.platform_id,
+      isGroup: mg.is_group === 1,
+      unknownSenderPolicy: mg.unknown_sender_policy,
+      deniedAt: mg.denied_at,
+      agentCount,
+      isMention,
+      threadId: event.threadId,
+    },
+  });
+
   // 1b. No wirings — either silent drop (plain chatter / denied channel) or
   //     escalate to owner for channel-registration approval.
   if (agentCount === 0) {
+    trace({
+      stage: 2,
+      event: 'route:dropped',
+      msgId: event.message.id,
+      file: 'src/router.ts',
+      fn: 'routeInbound',
+      data: { reason: mg.denied_at ? 'channel_denied' : isMention ? 'no_agent_wired' : 'not_a_mention', messagingGroupId: mg.id },
+    });
     if (!isMention) return;
     if (mg.denied_at) {
       log.debug('Message dropped — channel was denied by owner', {
@@ -396,8 +428,37 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
 
     const engages = await evaluateEngage(agent, messageText, isMention, mg, effectiveThreadId);
 
-    const accessOk = engages && (!accessGate || (await accessGate(event, userId, mg, agent.agent_group_id)).allowed);
+    let accessOk = engages && (!accessGate || (await accessGate(event, userId, mg, agent.agent_group_id)).allowed);
     const scopeOk = engages && (!senderScopeGate || (await senderScopeGate(event, userId, mg, agent)).allowed);
+    // Learning drill: a simulated access-gate refusal (NANOCLAW_LEARNING only).
+    if (accessOk && faultActive('route-denied')) accessOk = false;
+
+    trace({
+      stage: 2,
+      event: 'route:engage',
+      msgId: event.message.id,
+      agentGroupId: agent.agent_group_id,
+      file: 'src/router.ts',
+      fn: 'evaluateEngage · accessGate · senderScopeGate',
+      data: {
+        agentGroupId: agent.agent_group_id,
+        agentGroupName: agentGroup.name,
+        wiringId: agent.id,
+        engageMode: agent.engage_mode,
+        engagePattern: agent.engage_pattern,
+        sessionMode: agent.session_mode,
+        senderScope: agent.sender_scope,
+        ignoredMessagePolicy: agent.ignored_message_policy,
+        threadsEnabled,
+        effectiveThreadId,
+        userId,
+        engages,
+        accessOk,
+        scopeOk,
+        fault: faultActive('route-denied') ? 'route-denied' : null,
+        outcome: engages && accessOk && scopeOk ? 'engage' : agent.ignored_message_policy === 'accumulate' ? 'accumulate' : 'drop',
+      },
+    });
 
     if (engages && accessOk && scopeOk) {
       await deliverToAgent(agent, agentGroup, mg, event, userId, threadsEnabled, effectiveThreadId, true);
@@ -573,6 +634,17 @@ async function deliverToAgent(
   // which mention-sticky would read as an active thread.
   if (event.message.kind === 'chat' || event.message.kind === 'chat-sdk') {
     const gate = await gateCommand(event.message.content, userId, agent.agent_group_id);
+    if (gate.action !== 'pass') {
+      trace({
+        stage: 2,
+        event: 'route:command-gate',
+        msgId: event.message.id,
+        agentGroupId: agent.agent_group_id,
+        file: 'src/command-gate.ts',
+        fn: 'gateCommand',
+        data: { action: gate.action, command: (gate as { command?: string }).command ?? null, userId },
+      });
+    }
     if (gate.action === 'filter') {
       log.debug('Filtered command dropped by gate', { agentGroupId: agent.agent_group_id });
       return;
@@ -610,6 +682,27 @@ async function deliverToAgent(
   );
 
   const messageId = messageIdForAgent(event.message.id, agent.agent_group_id);
+  // Learning stage 3 (inbox): the session this message lands in.
+  trace({
+    stage: 3,
+    event: 'inbox:session',
+    msgId: event.message.id,
+    sessionId: session.id,
+    agentGroupId: agent.agent_group_id,
+    file: 'src/session-manager.ts',
+    fn: 'resolveSession',
+    data: {
+      sessionId: session.id,
+      created,
+      sessionMode: effectiveSessionMode,
+      threadId: effectiveThreadId,
+      containerStatus: session.container_status,
+      messagingGroupId: mg.id,
+      namespacedMessageId: messageId,
+      wake,
+      replyTo: deliveryAddr,
+    },
+  });
   // In arrival order: a message waiting for wake context is not overtaken. The
   // finally releases the turn on every way out, so no exit holds the next message.
   const turn = takeWriteTurn(session.id);
@@ -686,6 +779,16 @@ async function deliverToAgent(
     );
     const freshSession = await getSession(session.id);
     if (freshSession) {
+      trace({
+        stage: 4,
+        event: 'wake:requested',
+        msgId: event.message.id,
+        sessionId: session.id,
+        agentGroupId: agent.agent_group_id,
+        file: 'src/request-wake.ts',
+        fn: 'requestWake',
+        data: { reason: 'inbound-message', containerStatus: freshSession.container_status },
+      });
       const woke = await requestWake(freshSession, 'inbound-message');
       // requestWake never throws — it returns false on transient spawn
       // failure (host-sweep retries). Stop the typing indicator we just

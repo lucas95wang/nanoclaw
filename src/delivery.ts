@@ -30,6 +30,7 @@ import { runGuarded, type DeliveryGuardSpec, type GuardedDeliveryHandler } from 
 import { isUnguarded, type Unguarded } from './guard/index.js';
 import { mapConcurrent } from './concurrency.js';
 import { fanOutboundMessage } from './modules/cross-session-context/index.js';
+import { trace } from './learning/trace.js';
 import { log } from './log.js';
 import { normalizeOptions } from './channels/ask-question.js';
 import { clearOutbox, readOutboxFiles, withExistingMailboxSession } from './session-manager.js';
@@ -412,6 +413,17 @@ async function completeDelivery(
     mailbox.markDelivered(msg.id, platformMsgId ?? null),
   );
   await clearAttemptRow(msg.id);
+  // Learning stage 8 (deliver): the host recorded the delivery in inbound.db.
+  trace({
+    stage: 8,
+    event: 'deliver:done',
+    msgId: msg.inReplyTo,
+    sessionId: session.id,
+    agentGroupId: agentGroup.id,
+    file: 'src/delivery.ts',
+    fn: 'completeDelivery → mailbox.markDelivered',
+    data: { outboundId: msg.id, kind: msg.kind, channelType: msg.channelType, platformMsgId: platformMsgId ?? null, firstDelivery },
+  });
   if (msg.kind !== 'system' && msg.channelType !== 'agent') {
     pauseTypingRefreshAfterDelivery(session.id);
     if (msg.kind !== 'task_log') {
@@ -448,6 +460,16 @@ async function failDelivery(
   err: unknown,
 ): Promise<void> {
   const attempts = await recordAttemptRow(msg.id, session.id, err);
+  trace({
+    stage: 8,
+    event: 'deliver:failed',
+    msgId: msg.inReplyTo,
+    sessionId: session.id,
+    agentGroupId: agentGroup.id,
+    file: 'src/delivery.ts',
+    fn: 'failDelivery',
+    data: { outboundId: msg.id, attempts, maxAttempts: MAX_DELIVERY_ATTEMPTS, error: err instanceof Error ? err.message : String(err) },
+  });
   if (attempts !== null && attempts >= MAX_DELIVERY_ATTEMPTS) {
     log.error('Message delivery failed permanently, giving up', {
       messageId: msg.id,
@@ -556,6 +578,27 @@ async function deliverMessage(
   }
 
   const content = JSON.parse(msg.content);
+
+  // Learning stage 8 (deliver): the host read this row from outbound.db.
+  trace({
+    stage: 8,
+    event: 'deliver:send',
+    msgId: msg.inReplyTo,
+    sessionId: session.id,
+    agentGroupId: session.agent_group_id,
+    file: 'src/delivery.ts',
+    fn: 'drainSession → deliverMessage',
+    data: {
+      outboundId: msg.id,
+      kind: msg.kind,
+      channelType: msg.channelType,
+      platformId: msg.platformId,
+      threadId: msg.threadId,
+      inReplyTo: msg.inReplyTo,
+      systemAction: msg.kind === 'system' ? (content as { action?: string }).action ?? null : null,
+      content,
+    },
+  });
 
   // System actions — handle internally (cli_request, etc.)
   if (msg.kind === 'system') {

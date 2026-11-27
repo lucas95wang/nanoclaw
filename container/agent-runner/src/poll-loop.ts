@@ -10,6 +10,7 @@ import { getUndeliveredMessages, writeMessageOut, type MessageOutRow } from './d
 import { clearStaleProcessingAcks } from './db/container-state.js';
 import { resolveDestinationThread } from './db/session-routing.js';
 import { touchHeartbeat } from './heartbeat.js';
+import { ltrace } from './learning-trace.js';
 import { getAgentMailbox } from './mailbox/index.js';
 import {
   clearContinuation,
@@ -158,6 +159,21 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     markProcessing(ids);
 
     const routing = extractRouting(messages);
+    // Learning stage 5 (poll): the runner claimed this batch (processing_ack in outbound.db).
+    ltrace({
+      stage: 5,
+      event: 'poll:claimed',
+      msgId: ids[0],
+      fn: 'runPollLoop → getPendingMessages · markProcessing',
+      data: {
+        ids,
+        kinds: messages.map((m) => m.kind),
+        triggers: messages.map((m) => m.trigger),
+        pollCount,
+        continuation: continuation ?? null,
+        routing,
+      },
+    });
 
     // Command handling: the host router gates filtered and unauthorized
     // admin commands before they reach the container. The only command
@@ -238,6 +254,22 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     const prompt = formatMessagesWithCommands(keep, nativeSlashCommands, config.providerName);
 
     log(`Processing ${keep.length} message(s), kinds: ${[...new Set(keep.map((m) => m.kind))].join(',')}`);
+    // Learning stage 5 → 6: the prompt handed to the provider.
+    ltrace({
+      stage: 5,
+      event: 'poll:prompt',
+      msgId: keep[0]?.id,
+      fn: 'formatMessagesWithCommands → provider.query',
+      data: {
+        provider: config.providerName,
+        resume: continuation ?? null,
+        cwd: config.cwd,
+        nativeSlashCommands,
+        promptChars: prompt.length,
+        prompt,
+        skipped,
+      },
+    });
 
     const query = config.provider.query({
       prompt,
@@ -307,6 +339,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     // (e.g. stream closed unexpectedly).
     markCompleted(processingIds);
     log(`Completed ${ids.length} message(s)`);
+    ltrace({ stage: 7, event: 'poll:completed', msgId: processingIds[0] ?? ids[0], fn: 'markCompleted', data: { ids: processingIds } });
   }
 }
 
@@ -584,6 +617,30 @@ export async function processQuery(
     for await (const event of query.events) {
       handleEvent(event, routing);
       touchHeartbeat();
+      // Learning stage 6 (model): every provider event, with its heartbeat touch.
+      if (event.type !== 'activity') {
+        ltrace({
+          stage: 6,
+          event: `model:${event.type}`,
+          msgId: initialBatchIds[0],
+          file: 'container/agent-runner/src/providers/claude.ts',
+          fn: 'query → processQuery',
+          data:
+            event.type === 'init'
+              ? { continuation: event.continuation }
+              : event.type === 'text'
+                ? { chars: event.text.length, text: event.text }
+                : event.type === 'result'
+                  ? { isError: event.isError === true, error: event.error ?? null, chars: (event.text ?? '').length, text: event.text ?? null }
+                  : event.type === 'error'
+                    ? { message: event.message, retryable: event.retryable, classification: event.classification ?? null }
+                    : event.type === 'progress'
+                      ? { message: event.message }
+                      : event.type === 'file'
+                        ? { path: event.path }
+                        : {},
+        });
+      }
 
       if (event.type === 'init') {
         queryContinuation = event.continuation;

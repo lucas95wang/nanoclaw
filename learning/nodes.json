@@ -1,0 +1,27 @@
+{
+  "stages": [
+    { "id": "s1", "stage": 1, "title": "渠道接收", "feature": "01-receive.md", "file": "src/index.ts", "fn": "initChannelAdapters → onInbound" },
+    { "id": "s2", "stage": 2, "title": "路由决策", "feature": "02-route.md", "file": "src/router.ts", "fn": "routeInbound" },
+    { "id": "s3", "stage": 3, "title": "会话与收件箱", "feature": "03-inbox.md", "file": "src/session-manager.ts", "fn": "resolveSession · writeSessionMessage" },
+    { "id": "s4", "stage": 4, "title": "唤醒容器", "feature": "04-wake.md", "file": "src/container-runner.ts", "fn": "wakeContainer → spawnContainer" },
+    { "id": "s5", "stage": 5, "title": "容器取件", "feature": "05-poll.md", "file": "container/agent-runner/src/poll-loop.ts", "fn": "runPollLoop" },
+    { "id": "s6", "stage": 6, "title": "模型回合", "feature": "06-model.md", "file": "container/agent-runner/src/providers/claude.ts", "fn": "query · processQuery" },
+    { "id": "s7", "stage": 7, "title": "出件箱", "feature": "07-outbox.md", "file": "container/agent-runner/src/poll-loop.ts", "fn": "dispatchResultText → writeMessageOut" },
+    { "id": "s8", "stage": 8, "title": "宿主投递", "feature": "08-deliver.md", "file": "src/delivery.ts", "fn": "drainSession → deliverMessage" }
+  ],
+  "mechanisms": [
+    { "id": "m-sweep", "title": "心跳与 sweep", "feature": "m-sweep.md", "group": "side", "uses": ["s4", "s6"] },
+    { "id": "m-tasks", "title": "定时任务", "feature": "m-tasks.md", "group": "side", "uses": ["s3", "s4", "s7"] },
+    { "id": "m-memory", "title": "记忆与上下文", "feature": "m-memory.md", "group": "side", "uses": ["s4", "s6"] },
+    { "id": "m-mailbox", "title": "双信箱", "feature": "m-mailbox.md", "group": "side", "uses": ["s3", "s5", "s7", "s8"] },
+    { "id": "m-channels", "title": "渠道与接线", "feature": "m-channels.md", "group": "side", "uses": ["s1", "s2", "s8"] },
+    { "id": "m-isolation", "title": "容器隔离", "feature": "m-isolation.md", "group": "base", "uses": ["s4"] },
+    { "id": "m-gateway", "title": "凭证网关 OneCLI", "feature": "m-gateway.md", "group": "base", "uses": ["s4", "s6"] },
+    { "id": "m-approvals", "title": "审批 guard", "feature": "m-approvals.md", "group": "base", "uses": ["s6"] },
+    { "id": "m-centraldb", "title": "中央库 v2.db", "feature": "m-centraldb.md", "group": "base", "uses": ["s2", "s3"] },
+    { "id": "m-ncl", "title": "管理命令 ncl", "feature": "m-ncl.md", "group": "base", "uses": ["s7", "s8"] },
+    { "id": "m-logs", "title": "日志与排障", "feature": "m-logs.md", "group": "base", "uses": [] },
+    { "id": "m-setup", "title": "安装与升级", "feature": "m-setup.md", "group": "base", "uses": [] }
+  ],
+  "levels": ["未接触", "模糊", "理解", "能讲给别人听"]
+}

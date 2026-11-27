@@ -26,6 +26,8 @@ import { startGatewayAvailabilityMonitor } from './gateway-availability.js';
 import { getGatewayProvider } from './gateway-providers/index.js';
 import { routeInbound } from './router.js';
 import { log } from './log.js';
+import { startLearning, stopLearning } from './learning/index.js';
+import { trace } from './learning/trace.js';
 import { enforceUpgradeTripwire } from './upgrade-state.js';
 
 // Response registry lives in response-registry.ts to break the
@@ -94,6 +96,26 @@ async function main(): Promise<void> {
   await initChannelAdapters((adapter: ChannelAdapter): ChannelSetup => {
     return {
       onInbound(platformId, threadId, message) {
+        // Learning stage 1 (receive): the one seam every channel passes through.
+        trace({
+          stage: 1,
+          event: 'inbound',
+          msgId: message.id,
+          file: 'src/index.ts',
+          fn: 'initChannelAdapters › onInbound',
+          data: {
+            channelType: adapter.channelType,
+            instance: adapter.instance ?? adapter.channelType,
+            platformId,
+            threadId,
+            kind: message.kind,
+            timestamp: message.timestamp,
+            isMention: message.isMention,
+            isGroup: message.isGroup,
+            supportsThreads: adapter.supportsThreads,
+            content: message.content,
+          },
+        });
         inboundReady
           .then(() =>
             routeInbound({
@@ -188,6 +210,9 @@ async function main(): Promise<void> {
   // 9. Start the `ncl` CLI socket server (data/ncl.sock).
   await startCliServer();
 
+  // 10. Learning mode (NANOCLAW_LEARNING=1 only): trace server + panel.
+  await startLearning();
+
   log.info('NanoClaw running');
 
   // In the background, one group at a time: after an update the agent image is
@@ -199,6 +224,7 @@ async function main(): Promise<void> {
 async function shutdown(signal: string): Promise<void> {
   log.info('Shutdown signal received', { signal });
   hostAbortController.abort();
+  await stopLearning();
   stopGatewayAvailabilityMonitor?.();
   await stopGatewayApprovalCoordinator();
   await abortGatewaySessionObservers();

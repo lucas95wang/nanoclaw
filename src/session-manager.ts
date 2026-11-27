@@ -24,6 +24,7 @@ import {
   unbindSession,
   updateSession,
 } from './db/sessions.js';
+import { rememberSessionMessage, trace } from './learning/trace.js';
 import { log } from './log.js';
 import { getAgentMailbox, type InboundMessage, type MailboxSession } from './mailbox/index.js';
 import { enqueueSessionReconcile } from './reconcile-feeds.js';
@@ -329,6 +330,30 @@ export async function writeSessionMessage(
     });
   });
   await updateSession(sessionId, { last_active: new Date().toISOString() });
+  // Learning stage 3 (inbox): the row is durable in this session's inbound.db.
+  rememberSessionMessage(sessionId, message.id);
+  trace({
+    stage: 3,
+    event: 'inbox:written',
+    msgId: message.id,
+    sessionId,
+    agentGroupId,
+    file: 'src/session-manager.ts',
+    fn: 'writeSessionMessage',
+    data: {
+      messageId: message.id,
+      kind: message.kind,
+      trigger: message.trigger ?? true,
+      onWake: message.onWake ?? false,
+      processAfter: message.processAfter ?? null,
+      recurrence: message.recurrence ?? null,
+      channelType: message.channelType ?? null,
+      platformId: message.platformId ?? null,
+      threadId: message.threadId ?? null,
+      sessionDir: sessionDir(agentGroupId, sessionId),
+      content,
+    },
+  });
   // Ask for a prompt reconcile now that the message is durable: a wake that
   // fails transiently is retried within the queue's cadence instead of
   // waiting for the next resync tick. No-op when the sweep isn't running.

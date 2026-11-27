@@ -7,3 +7,6 @@
 // self-registration import below.
 
 import './cli.js';
+// Learning panel channel (learning branch): its factory returns null unless
+// NANOCLAW_LEARNING=1, so the official start path registers nothing extra.
+import './learning-web.js';
