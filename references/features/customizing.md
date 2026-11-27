@@ -26,6 +26,21 @@ When a sentence in a stage file cites a specific line or constant, treat it as a
 4. **Learning branch pieces are optional.** The fork does not need `src/learning/`; every verification in this map has a non-learning path (logs, `scripts/q.ts`, `ncl`). If the fork wants the panel, port in order: `src/learning/trace.ts` → the five host trace points → the container `learning-trace.ts` + three container points → `src/channels/learning-web.ts` → the server and panel. Keep every call behind `isLearning()`.
 5. **Keep the map next to the code.** Put it at `references/features/` in the fork, commit updates with the code change that caused them, and keep the Version-specific sections last so a reader stops before the drift-prone part.
 
+## Known drift: older v2 lines (for example a fork of v2.1.x)
+
+Checked on a company fork at v2.1.46 (merge-base with upstream 2026-07-10):
+
+| This map (v2026.11.0) | Older v2 code |
+|---|---|
+| `src/mailbox/` seam + `src/mailbox/sqlite/` | mailbox code inline in `src/session-manager.ts` and `src/db/session-db.ts`; runner side in `container/agent-runner/src/db/` |
+| `delivery_attempts` table, 60 s send deadline, 1 h give-up, `completeDelivery` / `failDelivery` | attempts in an in-memory `Map` in `src/delivery.ts` (reset on restart), no deadlines; `markDelivered` / `markDeliveryFailed` in `src/db/session-db.ts` |
+| `host_instances`, `session_claims`, `wake_signals` (migration 024) | absent; two hosts are not fenced at all |
+| `src/request-wake.ts`, `src/reconcile-session.ts` | `wakeContainer` called directly; stuck detection inside `src/host-sweep.ts` |
+| log line `Spawning session` | `Spawning container` |
+| channels installed by skills | channels such as `gchat.ts`, `github.ts` committed directly in `src/channels/` |
+
+The two-mailbox contract (one writer per file, `journal_mode=DELETE`, even/odd sequence) and the log strings `Message routed`, `Message delivered`, `MESSAGE DROPPED` held on that fork unchanged.
+
 ## Maintenance rules
 
 - A code change that moves a function, renames an env var or changes a constant updates the Version-specific section of the affected file in the same commit.

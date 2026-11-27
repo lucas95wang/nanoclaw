@@ -62,5 +62,5 @@ Run top to bottom; each step's evidence is in the linked file.
 ## Conventions
 
 - `$S` means `data/v2-sessions/<agent_group_id>/<session_id>`; find both with `ncl sessions list`.
-- SQL goes through `pnpm exec tsx scripts/q.ts <db> "<sql>"`.
+- SQL goes through `pnpm exec tsx scripts/q.ts <db> "<sql>"`; string literals inside the SQL use single quotes (`where kind = 'task'`), the tool rejects double-quoted literals.
 - "Learning trace" lines refer to events only present with `NANOCLAW_LEARNING=1` (`pnpm run learn`); every claim is also verifiable without it through the log or DB queries listed.

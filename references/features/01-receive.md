@@ -10,7 +10,7 @@ Adapters self-register on import via `registerChannelAdapter(name, { factory, de
 
 - Terminal: `pnpm run chat "hello"` connects to `data/cli.sock` and sends one JSON line (`src/channels/cli.ts` → `handleLine` → `config.onInbound('local', null, …)`).
 - Learning panel: the panel POSTs `/api/chat` and `src/channels/learning-web.ts` → `sendFromPanel()` → `config.onInbound('panel', null, …)`.
-- A chat app: its skill-installed adapter (`/add-telegram`, `/add-whatsapp`, …) calls the same `onInbound` from its SDK callbacks.
+- A chat app: its skill-installed adapter (`/add-telegram`, `/add-whatsapp`, …) calls the same `onInbound` from its SDK callbacks. Webhook-based platforms (Google Chat, Slack events, GitHub, Teams, Webex) first arrive at the shared webhook server `src/webhook-server.ts` (`WEBHOOK_HOST`/`WEBHOOK_PORT`, default 127.0.0.1:3000, usually exposed through a tunnel such as ngrok) on `/webhook/<instance>`, where the Chat SDK bridge turns the HTTP event into the same `onInbound` call.
 
 ## How an agent runs and verifies it
 

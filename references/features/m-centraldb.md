@@ -19,6 +19,7 @@ Indirectly through `ncl` (groups, messaging-groups, wirings, users, roles, membe
 ## Where it goes wrong
 
 - Two hosts on one DB: `host_instances` and `session_claims` fence them, but sockets still collide (see stage 1).
+- Host lease: each host process writes a row in `host_instances` with a 90 s lease renewed every 30 s (`src/host-instance.ts`); only a graceful stop (SIGTERM/SIGINT → `stopHostInstanceLease`) stamps `stopped_at`. After a `kill -9` the dead host looks live for up to 90 s, every spawn logs `Refusing session claim held by a live peer host` and `wakeContainer` fails with `claimed by another live host process`; an orphan container that is still running keeps answering meanwhile. Wait for the lease to expire (≤ 90 s) plus one sweep; never edit the table by hand. Repeated unclean stops also trigger the startup circuit breaker (m-logs).
 - Hand-edited rows without CHECK constraints (e.g. an unknown `engage_mode`) make the router fail closed with a warning.
 - Deleting `data/` resets the install (groups, wirings, sessions); `groups/` keeps memory and persona.
 

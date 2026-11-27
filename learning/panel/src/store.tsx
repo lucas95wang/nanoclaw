@@ -40,7 +40,20 @@ export interface State {
   faults: string[];
   sending: boolean;
   error: string | null;
+  /** Troubleshooting drill state lives here so it survives closing the quiz overlay to observe the panel. */
+  drill: DrillState;
 }
+
+export interface DrillState {
+  fault: string | null;
+  phase: 'idle' | 'broken' | 'diagnosed' | 'recovered';
+  pick: string | null;
+  result: boolean | null;
+  sentId: string | null;
+  verifyId: string | null;
+}
+
+export const DRILL_IDLE: DrillState = { fault: null, phase: 'idle', pick: null, result: null, sentId: null, verifyId: null };
 
 type Action =
   | { type: 'connected'; value: boolean }
@@ -60,7 +73,8 @@ type Action =
   | { type: 'quiz'; tab?: State['quizTab']; node?: string | null }
   | { type: 'faults'; value: string[] }
   | { type: 'sending'; value: boolean }
-  | { type: 'error'; value: string | null };
+  | { type: 'error'; value: string | null }
+  | { type: 'drill'; value: Partial<DrillState> };
 
 const initial: State = {
   connected: false,
@@ -81,6 +95,7 @@ const initial: State = {
   faults: [],
   sending: false,
   error: null,
+  drill: DRILL_IDLE,
 };
 
 function upsertEvent(messages: Record<string, MessageRecord>, order: string[], e: TraceEvent, source: MessageRecord['source']): { messages: Record<string, MessageRecord>; order: string[] } {
@@ -179,6 +194,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, sending: a.value };
     case 'error':
       return { ...s, error: a.value };
+    case 'drill':
+      return { ...s, drill: { ...s.drill, ...a.value } };
     default:
       return s;
   }

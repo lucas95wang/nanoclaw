@@ -26,6 +26,7 @@ An engaged message on a session with `container_status = stopped`; a due schedul
 ## Where it goes wrong
 
 - `Container start refused — every retry fails the same way` with `denied-by-policy` / `spec-invalid`: a mount outside the allowlist, a secret in env, or (learning drill) fault `wake-refused`. The sweep retries every 60 s; fix the cause and it heals.
+- `Refusing session claim held by a live peer host` then `wakeContainer failed … claimed by another live host process`: the previous host was not stopped gracefully and its 90 s lease in `host_instances` has not expired (m-centraldb). A surviving container from that host keeps answering; otherwise the message waits ≤ 90 s + one sweep. Stop hosts with SIGTERM/SIGINT.
 - Gateway unavailable (`Gateway session became unavailable before agent start`): OneCLI down; `docker ps` for `onecli`, `curl $ONECLI_URL/v1/health`.
 - Docker not reachable: `Failed to reach container runtime`.
 - Image missing after an upgrade: `container/build.sh` or `container/pull.sh`.

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api';
 import { STAGES, isFinished } from '../stages';
-import { useStore } from '../store';
+import { DRILL_IDLE, useStore } from '../store';
 import type { Level } from '../types';
 
 interface Grade {
@@ -81,15 +81,16 @@ const FAULT_OPTIONS = [
 ];
 
 export function Quiz() {
-  const { s, dispatch, reloadProfile, current, send } = useStore();
+  const { s, dispatch, reloadProfile, current } = useStore();
   const tab = s.quizTab;
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [grade, setGrade] = useState<Grade | null>(null);
   const [raw, setRaw] = useState<string>('');
   const [scenarioIdx, setScenarioIdx] = useState(0);
-  // drill state
-  const [drill, setDrill] = useState<{ fault: string | null; phase: 'idle' | 'broken' | 'diagnosed' | 'recovered'; pick: string | null; result: boolean | null; sentId: string | null; verifyId: string | null }>({ fault: null, phase: 'idle', pick: null, result: null, sentId: null, verifyId: null });
+  // drill state lives in the store so it survives leaving the overlay to observe the panel
+  const drill = s.drill;
+  const setDrill = (v: Partial<typeof drill>) => dispatch({ type: 'drill', value: v });
 
   const scenarios = useMemo(() => {
     if (!s.quizNode) return SCENARIOS;
@@ -161,19 +162,21 @@ export function Quiz() {
   const startDrill = async () => {
     const fault = Math.random() < 0.5 ? 'wake-refused' : 'route-denied';
     await api.setFault(fault, true);
-    setDrill({ fault, phase: 'broken', pick: null, result: null, sentId: null, verifyId: null });
+    setDrill({ ...DRILL_IDLE, fault, phase: 'broken' });
   };
+  // Leaves the overlay so the learner watches the real flow; the drill state
+  // waits here until they come back through the "考核" button.
   const sendProbe = async (verify: boolean) => {
     dispatch({ type: 'overlay', value: 'none' });
-    await send(verify ? 'Recovery check: reply with the single word OK.' : 'Drill: reply with the single word OK.');
-    setTimeout(() => dispatch({ type: 'quiz', tab: '排障演练' }), 50);
-    const id = s.currentMsgId;
-    setDrill((d) => (verify ? { ...d, verifyId: id } : { ...d, sentId: id }));
+    dispatch({ type: 'mode', value: 'live' });
+    const { msgId } = await api.chat(verify ? 'Recovery check: reply with the single word OK.' : 'Drill: reply with the single word OK.');
+    dispatch({ type: 'sent', msgId, text: verify ? 'Recovery check: reply with the single word OK.' : 'Drill: reply with the single word OK.' });
+    setDrill(verify ? { verifyId: msgId } : { sentId: msgId });
   };
   const diagnose = async () => {
     if (!drill.pick || !drill.fault) return;
     const ok = drill.pick === drill.fault;
-    setDrill((d) => ({ ...d, phase: 'diagnosed', result: ok }));
+    setDrill({ phase: 'diagnosed', result: ok });
     const node = drill.fault === 'wake-refused' ? 's4' : 's2';
     await api.profileUpdate({ exam: { type: '排障演练', id: drill.fault, result: ok ? '定位正确' : `定位错误（选了 ${drill.pick}）` } });
     if (ok) await api.profileUpdate({ level: { id: node, level: '能讲给别人听', note: '排障演练定位正确' } });
@@ -181,7 +184,7 @@ export function Quiz() {
   };
   const recover = async () => {
     if (drill.fault) await api.setFault(drill.fault, false);
-    setDrill((d) => ({ ...d, phase: 'recovered' }));
+    setDrill({ phase: 'recovered' });
   };
   const verifyMsg = drill.verifyId ? s.messages[drill.verifyId] : null;
   const recovered = verifyMsg ? isFinished(verifyMsg.events) && verifyMsg.events.some((e) => e.event === 'deliver:done') : false;
@@ -247,7 +250,7 @@ export function Quiz() {
                     <li>选出原因：</li>
                   </ol>
                   {FAULT_OPTIONS.map((o) => (
-                    <button key={o.key} className={`opt ${drill.pick === o.key ? 'sel' : ''}`} onClick={() => setDrill((d) => ({ ...d, pick: o.key }))} id={`drill-pick-${o.key}`}><i /><span>{o.text}</span></button>
+                    <button key={o.key} className={`opt ${drill.pick === o.key ? 'sel' : ''}`} onClick={() => setDrill({ pick: o.key })} id={`drill-pick-${o.key}`}><i /><span>{o.text}</span></button>
                   ))}
                   <button className="btn pri" style={{ marginTop: 8 }} disabled={!drill.pick} onClick={diagnose} id="drill-diagnose">提交诊断</button>
                 </div>
@@ -265,7 +268,7 @@ export function Quiz() {
                   <div style={{ marginTop: 6 }}>
                     {verifyMsg ? (recovered ? <span className="okc" id="drill-recovered">已恢复：{verifyMsg.msgId} 在 {new Date(verifyMsg.events.find((e) => e.event === 'deliver:done')!.tMs).toLocaleTimeString()} 投递完成</span> : <span className="muted">等待 {verifyMsg.msgId} 走完…</span>) : <span className="dim">还没发确认消息</span>}
                   </div>
-                  {recovered && <button className="btn" style={{ marginTop: 8 }} onClick={() => setDrill({ fault: null, phase: 'idle', pick: null, result: null, sentId: null, verifyId: null })} id="drill-again">再来一次</button>}
+                  {recovered && <button className="btn" style={{ marginTop: 8 }} onClick={() => setDrill(DRILL_IDLE)} id="drill-again">再来一次</button>}
                 </div>
               )}
             </>
