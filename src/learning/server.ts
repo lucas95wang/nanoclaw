@@ -139,9 +139,30 @@ async function stateSnapshot(): Promise<Record<string, unknown>> {
 let currentPort = DEFAULT_PORT;
 let startedAt = '';
 
+/**
+ * The server binds to 127.0.0.1, but a page in the learner's browser could
+ * still reach it through DNS rebinding or a cross-site POST. Only the panel's
+ * own origin may call the API: the Host must be this server, and a browser
+ * request (one that carries an Origin) must come from that same host. Tools
+ * like curl send no Origin and stay allowed.
+ */
+function originAllowed(req: http.IncomingMessage): boolean {
+  const host = req.headers.host ?? '';
+  const ok = host === `127.0.0.1:${currentPort}` || host === `localhost:${currentPort}`;
+  if (!ok) return false;
+  const origin = req.headers.origin;
+  if (typeof origin === 'string' && origin !== `http://${host}`) return false;
+  return true;
+}
+
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   const p = url.pathname;
+  if (!originAllowed(req)) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('forbidden: the learning panel only answers its own origin');
+    return;
+  }
   try {
     if (p === '/api/events' && req.method === 'GET') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
