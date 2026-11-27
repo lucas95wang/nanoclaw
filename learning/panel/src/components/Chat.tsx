@@ -23,7 +23,11 @@ export function Chat() {
   const recent = s.order.slice(-6).map((id) => s.messages[id]);
 
   return (
-    <div className="chat" id="chat">
+    <div className="chat zone-chat" id="chat">
+      <div className="zone-head">
+        <span className="zone-title"><i className="avatar">N</i>和真实的 NanoClaw 对话</span>
+        <span className="zone-sub">你发的消息真的交给 NanoClaw 处理；Nano 的回复经 ⑧ 送回这里。上面的流程图是这条消息在它内部走过的路。</span>
+      </div>
       <div className="chips">
         {SAMPLES.map((x) => (
           <button key={x.label} className="chip" title={`${x.text}\n路径：${x.path}`} onClick={() => submit(x.text)} disabled={s.sending} id={`sample-${x.label}`}>
@@ -40,9 +44,9 @@ export function Chat() {
           const fin = isFinished(m.events);
           return (
             <div key={m.msgId} style={{ display: 'contents' }}>
-              <div className={`msg ${isCur ? 'cur' : ''}`} onClick={() => dispatch({ type: 'current', msgId: m.msgId })} style={{ cursor: 'pointer' }}>
-                <div className="who">{m.source === 'panel' ? '你' : m.source === 'replay' ? '回放' : '渠道'}</div>
+              <div className={`msg me ${isCur ? 'cur' : ''}`} onClick={() => dispatch({ type: 'current', msgId: m.msgId })} style={{ cursor: 'pointer' }}>
                 <div className="body">{m.text || <span className="muted">{m.msgId}</span>}</div>
+                <div className="who">{m.source === 'panel' ? '你' : m.source === 'replay' ? '回放' : '终端'}</div>
               </div>
               {(() => {
                 // In step mode the reply is a spoiler until stage 8 is revealed.
@@ -50,7 +54,7 @@ export function Chat() {
                 return !hidden
                   ? m.replies.map((r) => (
                       <div className="msg" key={r.id}>
-                        <div className="who">Nano</div>
+                        <div className="who"><i className="avatar">N</i>Nano</div>
                         <div className={`body ${r.kind !== 'chat' ? 'sys' : ''}`}>{r.text ?? JSON.stringify(r.content)}</div>
                       </div>
                     ))
@@ -58,7 +62,7 @@ export function Chat() {
               })()}
               {(m.replies.length === 0 || (isCur && s.mode !== 'live' && s.step.revealed < 8)) && (
                 <div className="msg">
-                  <div className="who">Nano</div>
+                  <div className="who"><i className="avatar">N</i>Nano</div>
                   <div className="body wait">
                     {fin && m.events.some((e) => e.event === 'route:dropped')
                       ? '这条消息在 ② 被丢弃，不会有回复。点 ② 看原因。'

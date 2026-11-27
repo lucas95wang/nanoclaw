@@ -114,7 +114,7 @@ export function Details() {
       <div className="sect scroll" id="stage-details">
         {stage ? (
           <>
-            <h3>{stage.n} {stage.title} · 这一刻的真实数据</h3>
+            <h3>环节详情 · {stage.n} {stage.title} · 这一刻的真实数据</h3>
             {stage.n === 1 && s.snapshot && (
               <div className="dim" style={{ marginBottom: 6 }}>本机可观察的渠道：{s.snapshot.channels.map((c) => c.name).join('、')}。{s.snapshot.unavailable.whatsapp}</div>
             )}

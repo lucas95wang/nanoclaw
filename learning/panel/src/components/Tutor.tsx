@@ -54,10 +54,13 @@ export function Tutor() {
   };
 
   return (
-    <div className="tutor" id="tutor">
-      <div className="h3" style={{ margin: 0 }}>
-        导师 {stage ? `· 关于 ${stage.n} ${stage.title}` : ''}{' '}
-        {cli && !cli.loggedIn && <span className="errc" style={{ textTransform: 'none', letterSpacing: 0 }}>· 本机 claude CLI 未登录（{cli.detail}）</span>}
+    <div className="tutor zone-tutor" id="tutor">
+      <div className="zone-head">
+        <span className="zone-title"><i className="avatar tutor-avatar">?</i>导师 · 不是 NanoClaw{stage ? ` · 正在讲 ${stage.n} ${stage.title}` : ''}</span>
+        <span className="zone-sub">
+          回答关于上面这条消息的问题，引用它的真实数据；用的是本机的 claude 命令，不经过 NanoClaw。
+          {cli && !cli.loggedIn && <span className="errc"> 现在不可用：本机 claude CLI 未登录（{cli.detail}）</span>}
+        </span>
       </div>
       <div className="log">
         {log.length === 0 && <div className="dim">问一个关于当前环节的问题。回答会引用右上这条消息的真实数据（时间、id、容器名）。</div>}

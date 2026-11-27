@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Chat } from './components/Chat';
 import { Details } from './components/Details';
@@ -19,17 +19,21 @@ export function App() {
   const [showReplay, setShowReplay] = useState(false);
 
   // First visit: the welcome overlay explains where to start and what the profile suggests.
+  // Auto-open the welcome at most once per page load: always on a true first
+  // visit (no sessions in the profile yet), otherwise once per browser session.
+  const welcomedRef = useRef(false);
   useEffect(() => {
-    // Always on a true first visit (no sessions in the profile), otherwise once per browser session.
-    const firstEver = s.profile ? s.profile.sessions.length === 0 : false;
+    if (!s.profile || welcomedRef.current) return;
+    welcomedRef.current = true;
+    const firstEver = s.profile.sessions.length === 0;
     let seen = false;
     try {
       seen = !!sessionStorage.getItem('nc-welcomed');
     } catch {
       seen = false;
     }
-    if (s.profile && s.overlay === 'none' && (firstEver || !seen)) dispatch({ type: 'overlay', value: 'welcome' });
-  }, [s.profile, s.overlay, dispatch]);
+    if (firstEver || !seen) dispatch({ type: 'overlay', value: 'welcome' });
+  }, [s.profile, dispatch]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('rm', s.reducedMotion);
@@ -101,6 +105,10 @@ export function App() {
       <div className="main">
         <div className="left">
           <div className="flowwrap">
+            <div className="zone-head">
+              <span className="zone-title">NanoClaw 内部 · 一条消息经过的 8 个环节</span>
+              <span className="zone-sub">按真实顺序点亮，时间轴是真实耗时；点任意格子，右栏显示它那一刻的数据。上排是宿主进程，下排是 agent 容器。</span>
+            </div>
             <Timeline />
             <FlowGraph />
           </div>
