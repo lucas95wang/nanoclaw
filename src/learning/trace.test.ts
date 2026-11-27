@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { _resetTraceForTesting, baseMessageId, emit, isLearning, redact, subscribe, trace } from './trace.js';
+import { _resetTraceForTesting, baseMessageId, emit, isLearning, redact, rememberBatch, subscribe, trace, type TraceEvent } from './trace.js';
+
+type TraceEventLike = TraceEvent;
 
 describe('learning trace', () => {
   afterEach(() => _resetTraceForTesting());
@@ -37,6 +39,15 @@ describe('learning trace', () => {
     expect(e.msgId).toBe('cli-9');
     expect(e.seq).toBe(1);
     expect(e.side).toBe('container');
+  });
+
+  it('mirrors delivery events to every message answered by one container batch', () => {
+    rememberBatch(['web-1:ag-1', 'web-2:ag-1']);
+    const seen: TraceEventLike[] = [];
+    subscribe((e) => seen.push(e));
+    emit({ stage: 8, event: 'deliver:done', msgId: 'web-1:ag-1', file: 'f', fn: 'g' });
+    expect(seen.map((e) => e.msgId)).toEqual(['web-1', 'web-2']);
+    expect(seen[1].data.answeredAs).toBe('web-1');
   });
 
   it('in learning mode, container events inherit the message last written to their session', async () => {

@@ -13,7 +13,7 @@ import path from 'path';
 
 import { log } from '../log.js';
 import { sessionDir } from '../session-manager.js';
-import { emit, isLearning, messageForSession, type TraceInput } from './trace.js';
+import { emit, isLearning, messageForSession, rememberBatch, type TraceInput } from './trace.js';
 
 export const TRACE_MARKER = '.learning-trace.on';
 export const TRACE_FILE = '.learning-trace.jsonl';
@@ -89,6 +89,7 @@ function drain(sessionId: string, agentGroupId: string): void {
       // tags model events with the FIRST batch's id. The message the host wrote
       // most recently to this session is the one being answered.
       const msgId = event.startsWith('model:') ? (messageForSession(sessionId) ?? parsed.msgId ?? null) : (parsed.msgId ?? null);
+      if (event === 'poll:claimed' && Array.isArray(parsed.data?.ids)) rememberBatch((parsed.data.ids as unknown[]).map(String));
       emit({
         side: 'container',
         stage: typeof parsed.stage === 'number' ? parsed.stage : 0,

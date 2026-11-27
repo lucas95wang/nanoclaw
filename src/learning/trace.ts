@@ -70,6 +70,19 @@ let seq = 0;
 
 /** session id → the message id most recently written for it (stage 3). */
 const lastMsgBySession = new Map<string, string>();
+/**
+ * A container claims every pending row of a session as one batch and answers
+ * once; the reply's `in_reply_to` names the first id only. Remember batch
+ * membership (from the container's `poll:claimed` event) so model, outbox and
+ * delivery events are mirrored to the other messages of the batch.
+ */
+const batchOf = new Map<string, string[]>();
+
+export function rememberBatch(ids: string[]): void {
+  const base = ids.map((id) => baseMessageId(id) ?? id);
+  if (base.length < 2) return;
+  for (const id of base) batchOf.set(id, base);
+}
 /** Recent events kept in memory for a panel that connects late. */
 const RING_MAX = 2000;
 const ring: TraceEvent[] = [];
@@ -169,6 +182,19 @@ export function emit(input: TraceInput): TraceEvent {
     fn: input.fn,
     data: (redact(input.data ?? {}) as Record<string, unknown>) ?? {},
   };
+  publish(event);
+  // Mirror the shared turn to the other messages answered by the same batch.
+  const siblings = msgId && event.stage >= 6 && event.stage <= 8 && !event.data.sharedBatch ? batchOf.get(msgId) : undefined;
+  if (siblings) {
+    for (const other of siblings) {
+      if (other === msgId) continue;
+      publish({ ...event, seq: ++seq, msgId: other, data: { ...event.data, sharedBatch: siblings, answeredAs: msgId } });
+    }
+  }
+  return event;
+}
+
+function publish(event: TraceEvent): void {
   ring.push(event);
   if (ring.length > RING_MAX) ring.splice(0, ring.length - RING_MAX);
   appendToFile(event);
@@ -180,7 +206,6 @@ export function emit(input: TraceInput): TraceEvent {
       /* ignore */
     }
   }
-  return event;
 }
 
 /** List stored traces, newest first. */
@@ -228,5 +253,6 @@ export function _resetTraceForTesting(): void {
   subscribers.clear();
   ring.length = 0;
   lastMsgBySession.clear();
+  batchOf.clear();
   seq = 0;
 }
