@@ -20,7 +20,15 @@ export function App() {
 
   // First visit: the welcome overlay explains where to start and what the profile suggests.
   useEffect(() => {
-    if (s.profile && s.overlay === 'none' && !sessionStorage.getItem('nc-welcomed')) dispatch({ type: 'overlay', value: 'welcome' });
+    // Always on a true first visit (no sessions in the profile), otherwise once per browser session.
+    const firstEver = s.profile ? s.profile.sessions.length === 0 : false;
+    let seen = false;
+    try {
+      seen = !!sessionStorage.getItem('nc-welcomed');
+    } catch {
+      seen = false;
+    }
+    if (s.profile && s.overlay === 'none' && (firstEver || !seen)) dispatch({ type: 'overlay', value: 'welcome' });
   }, [s.profile, s.overlay, dispatch]);
 
   useEffect(() => {
@@ -58,6 +66,7 @@ export function App() {
           <i className={s.connected ? '' : 'off'} />
           NanoClaw 学习面板
         </div>
+        <button className="btn sm" onClick={() => dispatch({ type: 'overlay', value: 'welcome' })} id="open-help" title="这是什么、先做什么">说明</button>
         <div className="tabs" role="tablist" aria-label="模式">
           <button className={s.mode === 'live' ? 'on' : ''} onClick={() => setMode('live')} id="mode-live">实时</button>
           <button className={s.mode === 'step' ? 'on' : ''} onClick={() => setMode('step')} id="mode-step">单步</button>

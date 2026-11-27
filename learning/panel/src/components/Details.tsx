@@ -67,9 +67,11 @@ export function Details() {
       <div className="sect" id="next-step">
         <h3>{pendingStage ? '下一步 · 猜一猜' : s.mode === 'replay' && current ? '回放' : '下一步'}</h3>
         {!current && (
-          <div className="card">
-            <div>发一条消息，看它怎么走完 8 个环节。</div>
-            <div className="muted" style={{ marginTop: 4 }}>先用左下的示例按钮；想逐步猜就先切到"单步"。</div>
+          <div className="card hi">
+            <div><b>第一步：</b>点左下角的 <b>普通聊天</b>。这条消息会真的交给 NanoClaw，左边 8 个格子按真实顺序变绿。</div>
+            <div style={{ marginTop: 6 }}><b>第二步：</b>点任意一个格子，这里显示它那一刻的真实数据、它做什么、为什么需要它。</div>
+            <div style={{ marginTop: 6 }}><b>第三步：</b>顶栏切到 <b>单步</b>，再发一条，每步先猜再看答案。</div>
+            <div className="muted" style={{ marginTop: 6 }}>不清楚这个面板是什么：点顶栏的"说明"。</div>
           </div>
         )}
         {current && pendingStage && q && (

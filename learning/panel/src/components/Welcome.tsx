@@ -25,7 +25,12 @@ export function Welcome() {
     <div className="overlay" id="welcome">
       <div className="topbar"><div className="brand"><i />NanoClaw 学习面板</div><div className="status"><button className="btn sm" onClick={close} id="welcome-close">进入面板 ›</button></div></div>
       <div className="welcome scroll">
-        <h1>{first ? '从这里开始' : '上次学到哪里'}</h1>
+        <h1>{first ? '这是什么，先做什么' : '上次学到哪里'}</h1>
+        <div className="card" style={{ lineHeight: 1.7 }}>
+          <div><b>这是什么。</b>一个真实在跑的 NanoClaw（你的个人 AI 助手，宿主进程 + 每段对话一个 Docker 容器），外面套了一层观察窗。你在这里发的每条消息都真的交给 NanoClaw 处理，面板只是把它经过的 8 个环节（进入 → 路由 → 写收件箱 → 起容器 → 容器取件 → 调模型 → 写出件箱 → 送回）按真实时间点亮，并把每一步当时的真实数据摆出来。</div>
+          <div style={{ marginTop: 6 }}><b>学完能得到什么。</b>脑子里一张 NanoClaw 的知识地图：每个环节做什么、为什么需要它、在哪个文件；以后自己维护它不用再翻代码。</div>
+          <div style={{ marginTop: 6 }}><b>现在就做的一件事。</b>点"开始"，然后点左下角的 <b>普通聊天</b> 按钮，看着流程图上 8 个格子一个个变绿。</div>
+        </div>
         {!first && s.summary && (
           <div className="card">
             <div><b>上次</b> <span className="muted">{s.summary.lastSession ?? s.profile?.sessions.slice(-1)[0]}</span></div>
@@ -38,6 +43,7 @@ export function Welcome() {
             <div><b>今天建议</b> <span className="muted" id="today-suggestion">{s.summary?.suggestion ?? '先发一条示例消息，看它走完 8 个环节。'}</span></div>
           </div>
         )}
+        <div className="h3" style={{ marginTop: 6 }}>之后的学法（按顺序）</div>
         <ol>
           <li><b>看一遍真实流程。</b>左下点"普通聊天"，流程图上 8 个环节会按真实顺序点亮，上方时间轴显示每段耗时。</li>
           <li><b>点任意环节。</b>右栏显示它这一刻的真实数据（容器名、挂载、SQLite 行）、它做什么、为什么需要它，还有 feature map。</li>
