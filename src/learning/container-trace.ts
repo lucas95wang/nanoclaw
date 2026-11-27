@@ -13,7 +13,7 @@ import path from 'path';
 
 import { log } from '../log.js';
 import { sessionDir } from '../session-manager.js';
-import { emit, isLearning, type TraceInput } from './trace.js';
+import { emit, isLearning, messageForSession, type TraceInput } from './trace.js';
 
 export const TRACE_MARKER = '.learning-trace.on';
 export const TRACE_FILE = '.learning-trace.jsonl';
@@ -84,11 +84,16 @@ function drain(sessionId: string, agentGroupId: string): void {
       } catch {
         continue;
       }
+      const event = String(parsed.event ?? 'unknown');
+      // A warm container keeps one SDK query open across turns, so the runner
+      // tags model events with the FIRST batch's id. The message the host wrote
+      // most recently to this session is the one being answered.
+      const msgId = event.startsWith('model:') ? (messageForSession(sessionId) ?? parsed.msgId ?? null) : (parsed.msgId ?? null);
       emit({
         side: 'container',
         stage: typeof parsed.stage === 'number' ? parsed.stage : 0,
-        event: String(parsed.event ?? 'unknown'),
-        msgId: parsed.msgId ?? null,
+        event,
+        msgId,
         sessionId,
         agentGroupId,
         file: String(parsed.file ?? 'container/agent-runner/src/poll-loop.ts'),

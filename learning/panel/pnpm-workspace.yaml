@@ -1,0 +1,2 @@
+# This folder is its own pnpm project, separate from the NanoClaw root workspace.
+packages: []

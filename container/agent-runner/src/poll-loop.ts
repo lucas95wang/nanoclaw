@@ -571,6 +571,10 @@ export async function processQuery(
         const keptIds = keep.map((m) => m.id);
         const prompt = formatMessages(keep);
         log(`Pushing ${keep.length} follow-up message(s) into active query`);
+        // Learning stage 5: a warm container claims a follow-up and pushes it
+        // into the open query instead of starting a new one.
+        ltrace({ stage: 5, event: 'poll:claimed', msgId: keptIds[0], fn: 'processQuery › follow-up poll (500 ms)', data: { ids: keptIds, followUp: true, warmQuery: true } });
+        ltrace({ stage: 5, event: 'poll:prompt', msgId: keptIds[0], fn: 'formatMessages → query.push', data: { followUp: true, promptChars: prompt.length, prompt, skipped } });
         query.push(prompt);
         archivePrompts.push(prompt);
         const next: QueuedTurn = {

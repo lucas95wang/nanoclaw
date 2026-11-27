@@ -281,8 +281,16 @@ export function stopLearningServer(): Promise<void> {
   for (const c of clients) c.end();
   clients.clear();
   return new Promise((resolve) => {
-    if (!server) return resolve();
-    server.close(() => resolve());
+    const srv = server;
     server = null;
+    if (!srv) return resolve();
+    // SSE clients reconnect at once, so close() alone could wait forever on
+    // keep-alive sockets and hold up the host's graceful shutdown.
+    const timer = setTimeout(() => resolve(), 1000);
+    srv.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+    srv.closeAllConnections();
   });
 }

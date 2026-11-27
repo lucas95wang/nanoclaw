@@ -455,7 +455,7 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
         engages,
         accessOk,
         scopeOk,
-        fault: faultActive('route-denied') ? 'route-denied' : null,
+        gate: accessOk ? 'allowed' : engages ? 'access gate refused this sender' : 'not evaluated (did not engage)',
         outcome: engages && accessOk && scopeOk ? 'engage' : agent.ignored_message_policy === 'accumulate' ? 'accumulate' : 'drop',
       },
     });

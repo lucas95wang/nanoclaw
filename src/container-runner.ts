@@ -57,7 +57,7 @@ import {
 } from './gateway-providers/index.js';
 import { releaseGatewaySession, type GatewaySessionControl } from './gateway-session-lifecycle.js';
 import { initGroupFilesystem } from './group-init.js';
-import { armSessionTrace, unwatchSession } from './learning/container-trace.js';
+import { armSessionTrace, unwatchSession, watchSession } from './learning/container-trace.js';
 import { faultActive } from './learning/faults.js';
 import { trace } from './learning/trace.js';
 import { getAgentMailbox } from './mailbox/index.js';
@@ -410,6 +410,9 @@ export function wakeContainer(session: Session): Promise<boolean> {
   }
   if (activeContainers.has(session.id)) {
     log.debug('Container already running', { sessionId: session.id });
+    // A warm (or adopted) container keeps writing its trace file; make sure
+    // this host process is tailing it. No-op outside learning mode.
+    watchSession(session.agent_group_id, session.id);
     trace({
       stage: 4,
       event: 'wake:already-running',
@@ -572,9 +575,9 @@ async function spawnContainer(session: Session): Promise<void> {
     // Learning drill: a simulated driver refusal. The host sweep retries each
     // minute, so clearing the fault heals the session.
     if (faultActive('wake-refused')) {
-      throw Object.assign(new Error('learning fault wake-refused: session driver refused to start the agent container'), {
+      throw Object.assign(new Error('session driver refused to start the agent container (denied-by-policy)'), {
         kind: 'denied-by-policy',
-        detail: 'NANOCLAW_LEARNING drill: fault "wake-refused" is active',
+        detail: 'the driver rejected the composed SessionSpec for this session; every retry fails the same way until the cause is fixed',
       });
     }
     // Arm the container-side trace file for this run (marker in the session dir).
