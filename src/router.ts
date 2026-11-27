@@ -674,6 +674,15 @@ async function deliverToAgent(
     }
   }
 
+  trace({
+    stage: 3,
+    event: 'inbox:resolve-session',
+    msgId: event.message.id,
+    agentGroupId: agent.agent_group_id,
+    file: 'src/session-manager.ts',
+    fn: 'resolveSession (entering)',
+    data: { messagingGroupId: mg.id, threadId: effectiveThreadId, sessionMode: effectiveSessionMode },
+  });
   const { session, created } = await resolveSession(
     agent.agent_group_id,
     mg.id,

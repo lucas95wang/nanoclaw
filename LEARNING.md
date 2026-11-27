@@ -20,7 +20,9 @@
 | 向导最后的验证步报 `failed` | 只是因为没接聊天软件、注册的 agent 组为 0；用 `scripts/init-cli-agent.ts` 接终端渠道后就正常 |
 | 宿主被 `kill` 而不是 Ctrl-C 停掉后，新进程起容器报 `claimed by another live host` | 宿主租约没释放；要么等它过期，要么用 Ctrl-C 优雅退出。学习服务原本会让 Ctrl-C 卡住（SSE 长连接），已修 |
 | 热容器（学习模式启动前就在跑）没有容器侧 trace | 面板在 ⑤ 上说明原因；`ncl groups restart --id <组>` 后下次 spawn 会带上开关 |
+| 2026-11-27 两次观察到：宿主硬杀后新进程领养了旧容器，再 `ncl groups restart`，之后每条消息都停在路由之后（trace 到 `route:engage` 为止，没有 `inbox:session`），日志无报错 | 未确认根因（上游路径，不在学习改动里）。恢复：Ctrl-C 优雅退出再启动。不要在领养状态下 restart；端到端测试默认不再 restart（`E2E_RESTART=1` 才做） |
 | 改了代码后服务拒绝启动（upgrade tripwire） | `pnpm exec tsx scripts/upgrade-state.ts set`，`learning/start.sh` 已包含这一步 |
+| 用 `node … \| tee 文件` 跑宿主，Ctrl-C 时 tee 先死、宿主写日志遇到断管直接退出，被当成"非正常退出"，断路器把下次启动延迟到 15 分钟 | 不要用管道：`pnpm run learn` 直接跑在前台；要留日志就 `> 文件 2>&1`。测试机上可以删 `data/circuit-breaker.json` 清掉退避 |
 
 ## 启动方法
 
