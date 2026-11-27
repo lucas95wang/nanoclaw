@@ -21,6 +21,7 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 
+import { restartAgentGroupContainers } from '../container-restart.js';
 import { getAllAgentGroups } from '../db/agent-groups.js';
 import { getActiveSessions } from '../db/sessions.js';
 import { getActiveAdapters } from '../channels/channel-registry.js';
@@ -246,6 +247,12 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
       if (!isFaultName(body.name)) return json(res, 400, { error: 'unknown fault', names: FAULT_NAMES });
       setFault(body.name, body.on !== false);
       trace({ stage: 0, event: `fault:${body.on !== false ? 'set' : 'clear'}`, file: 'src/learning/faults.ts', fn: 'setFault', data: { name: body.name }, side: 'panel' });
+      // A driver refusal only shows when a container must be started, so stop
+      // the warm containers (same path as `ncl groups restart`): the next
+      // message has to spawn, and the spawn is what the fault breaks.
+      if (body.name === 'wake-refused' && body.on !== false) {
+        for (const g of await getAllAgentGroups()) await restartAgentGroupContainers(g.id, 'learning drill: wake-refused');
+      }
       broadcast('faults', { active: activeFaults() });
       return json(res, 200, { active: activeFaults() });
     }

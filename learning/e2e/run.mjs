@@ -42,6 +42,15 @@ async function waitFinished(page, timeout = 60_000) {
   await page.getByText('完成 · 到 ⑧').first().waitFor({ state: 'visible', timeout });
 }
 
+// The run plays a learner and therefore writes to learning/learner-profile.md;
+// keep the real learner's profile intact by restoring it afterwards.
+const PROFILE = path.resolve('..', 'learner-profile.md');
+const profileBackup = fs.existsSync(PROFILE) ? fs.readFileSync(PROFILE, 'utf-8') : null;
+process.on('exit', () => {
+  if (profileBackup !== null) fs.writeFileSync(PROFILE, profileBackup);
+  else if (fs.existsSync(PROFILE)) fs.unlinkSync(PROFILE);
+});
+
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 } });
 const page = await ctx.newPage();
