@@ -507,6 +507,14 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
   }
 
   if (engagedCount + accumulatedCount === 0) {
+    trace({
+      stage: 2,
+      event: 'route:dropped',
+      msgId: event.message.id,
+      file: 'src/router.ts',
+      fn: 'routeInbound',
+      data: { reason: 'no_agent_engaged', messagingGroupId: mg.id, wiredAgents: agents.length },
+    });
     await recordDroppedMessage({
       channel_type: event.channelType,
       platform_id: event.platformId,

@@ -158,7 +158,8 @@ details > summary:hover { color: var(--fg); }
 .tutor .log { overflow: auto; display: flex; flex-direction: column; gap: 8px; max-height: 32vh; min-height: 0; }
 .q { color: var(--muted); }
 .q::before { content: '› '; color: var(--accent); }
-.a { border-left: 2px solid var(--line); padding-left: 10px; white-space: pre-wrap; word-break: break-word; }
+.a { border-left: 2px solid var(--line); padding-left: 10px; word-break: break-word; }
+.a.md p { margin: 0 0 6px; } .a.md ol, .a.md ul { margin: 0 0 6px; padding-left: 18px; }
 .a.err { border-color: var(--err); color: var(--muted); }
 
 /* overlays */

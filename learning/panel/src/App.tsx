@@ -82,7 +82,7 @@ export function App() {
           {current && <span>消息 <b>{current.msgId}</b></span>}
           <span id="status-text">状态：<b>{statusText}</b></span>
           <span>{s.snapshot ? `服务 ${s.snapshot.channels.map((c) => c.name).join('+')} · ${s.snapshot.sessions.filter((x) => x.containerStatus !== 'stopped').length} 个容器` : '连接中…'}</span>
-          {s.faults.length > 0 && <span className="err">故障开关：{s.faults.join(', ')}</span>}
+          {s.faults.length > 0 && (s.drill.phase === 'broken' ? <span className="err">排障演练进行中 · 有一个环节被弄坏了</span> : <span className="err">故障开关：{s.faults.join(', ')}</span>)}
           <button className={`toggle ${s.reducedMotion ? 'on' : ''}`} onClick={() => dispatch({ type: 'reducedMotion', value: !s.reducedMotion })} id="reduced-motion">
             <i /> 减少动效
           </button>

@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import { useState } from 'react';
 
 import { api } from '../api';
@@ -62,7 +64,8 @@ export function Tutor() {
         {log.map((t, i) => (
           <div key={i}>
             <div className="q">{t.q}</div>
-            <div className={`a ${t.err ? 'err' : ''}`}>{t.a}{t.ms ? <span className="dim"> · {(t.ms / 1000).toFixed(1)} s</span> : null}</div>
+            {/* The answer comes from the local claude CLI we invoked; rendered as markdown. */}
+            <div className={`a md ${t.err ? 'err' : ''}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(t.a) as string) + (t.ms ? `<span class="dim"> · ${(t.ms / 1000).toFixed(1)} s</span>` : '') }} />
           </div>
         ))}
         {busy && <div className="a dim">导师在读 trace…</div>}

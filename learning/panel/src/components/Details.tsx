@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -59,7 +60,7 @@ export function Details() {
     }
   };
 
-  const html = useMemo(() => (featureMd ? (marked.parse(featureMd) as string) : ''), [featureMd]);
+  const html = useMemo(() => (featureMd ? DOMPurify.sanitize(marked.parse(featureMd) as string) : ''), [featureMd]);
 
   return (
     <>
